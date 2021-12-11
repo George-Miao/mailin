@@ -163,6 +163,43 @@ impl Response {
         Ok(())
     }
 
+    /// Async equivalent of [`write_to`], with async support.
+    #[cfg(feature = "tokio_io")]
+    pub async fn write_to_async<T: tokio::io::AsyncWrite>(
+        &self,
+        out: &mut std::pin::Pin<Box<T>>,
+    ) -> io::Result<()> {
+        use tokio::io::AsyncWriteExt;
+
+        macro_rules! write_async {
+            ( $out:expr, $( $arg:tt )+ ) => {( $out.write_all( format!( $( $arg )+ ).as_bytes()).await? )};
+            ( $out:expr ) => {( $out.write_all($temp.as_bytes()).await? )}
+        }
+
+        match &self.message {
+            Message::Dynamic(ref head, ref tail) => {
+                if tail.is_empty() {
+                    write_async!(out, "{} {}\r\n", self.code, head);
+                    out.write_all(format!("{} {}\r\n", self.code, head).as_bytes())
+                        .await?;
+                } else {
+                    write_async!(out, "{}-{}\r\n", self.code, head);
+                    for i in 0..tail.len() {
+                        if tail.len() > 1 && i < tail.len() - 1 {
+                            write_async!(out, "{}-{}\r\n", self.code, tail[i]);
+                        } else {
+                            write_async!(out, "{} {}\r\n", self.code, tail[i]);
+                        }
+                    }
+                }
+            }
+            Message::Fixed(s) => write_async!(out, "{} {}\r\n", self.code, s),
+            Message::Custom(s) => write_async!(out, "{} {}\r\n", self.code, s),
+            Message::Empty => (),
+        };
+        Ok(())
+    }
+
     // Log the response
     pub(crate) fn log(&self) {
         match self.message {
