@@ -180,8 +180,6 @@ impl Response {
             Message::Dynamic(ref head, ref tail) => {
                 if tail.is_empty() {
                     write_async!(out, "{} {}\r\n", self.code, head);
-                    out.write_all(format!("{} {}\r\n", self.code, head).as_bytes())
-                        .await?;
                 } else {
                     write_async!(out, "{}-{}\r\n", self.code, head);
                     for i in 0..tail.len() {
